@@ -127,7 +127,7 @@ class Retriever:
         print("passages have been loaded")
 
     def search_document(self, query, top_n=10):
-        questions_embedding = self.embed_queries(self.args, [query])
+        questions_embedding = self.embed_queries(self.args, query)
 
         # get top k results
         start_time_retrieval = time.time()

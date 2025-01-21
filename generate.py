@@ -41,12 +41,22 @@ def decode(example, tokenizer, feature):
     text = tokenizer.decode(example[feature + "_ids"], skip_special_tokens=True)
     return {feature: text}
 
-def map_question_to_input(row):
-    txt = row["question"]
-    messages = [{'role':'system','content':'You are a helpful assistant that answer to the question.'},{"role":'user',"content":txt}]
-    row["messages"]=messages
-    return row
-
+def map_question_to_input(row,option,retriever):
+    if(option=='naiive'):
+        txt = row["question"]
+        messages = [{'role':'system','content':'You are a helpful assistant that answer to the question.'},{"role":'user',"content":txt}]
+        row["messages"]=messages
+        return row
+    elif(option=='rag'):
+        txt = row["question"]
+        rs = retriever.search_document(txt, top_n=5)
+        txt2 = "[Knowledge]\n"+'\n'.join([t['title']+" "+t['text'] for t in rs])
+        txt2 +='\n[Question]\n'
+        txt2 += txt
+        messages = [{'role':'system','content':'You are a helpful assistant that answer to the question with the given knowledge.'},{"role":'user',"content":txt2}]
+        row["messages"]=messages
+        return row
+    
 def map_entity(row):
     pattern = r"\(([^,]+),\s*([^\)]+)\)"
 
@@ -74,6 +84,8 @@ if __name__=="__main__":
     parser.add_argument("--num_proc", type=int, default=16, help="number of processors for processing datasets")
     parser.add_argument("--log_every", type=int, default=20, help="logging interval in steps")
     
+    parser.add_argument("--option",choices=['naiive','rag'],default='naiive')
+
     ### Generation Options
     parser.add_argument("--batch_size", type=int, default=16, help="batch size for inference")
     parser.add_argument("--max_tokens", type=int, default=300, help="generation config; max new tokens")
@@ -95,12 +107,10 @@ if __name__=="__main__":
     parser.add_argument("--retrieval_n_bits", type=int, default=8, help="Number of bits per subquantizer")
     parser.add_argument("--per_gpu_batch_size", type=int, default=1000000, help="Number of bits per subquantizer")
     parser.add_argument("--question_maxlength", type=int, default=100000, help="Number of bits per subquantizer")
-    parser.add_argument("--max_k", type=int, default=100, help="Number of documents to retrieve per questions")
+    parser.add_argument("--max_k", type=int, default=10, help="Number of documents to retrieve per questions")
     
     args = parser.parse_args()
 
-    retriever = Retriever(args)
-    retriever.setup_retriever()
 
     dataset = Dataset.from_json(args.dataset_path)
 
@@ -109,13 +119,28 @@ if __name__=="__main__":
     tokenizer.pad_token = tokenizer.eos_token
     model.eval()
 
-    dataset = dataset.map(partial(map_question_to_input))
-    dataset = dataset.map(partial(build_prompt, tokenizer=tokenizer),num_proc=args.num_proc)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_proc, collate_fn=partial(collate_fn, tokenizer=tokenizer), pin_memory=True) 
-    print("Length of DataLoader :",len(dataloader))
 
-    output_ids = generate(model, tokenizer, dataloader, args.log_every, max_new_tokens=args.max_tokens, do_sample=args.do_sample, temperature=args.temperature, top_k=args.top_k, top_p=args.top_p)
-    dataset = dataset.add_column("output_ids", output_ids) 
-    dataset = dataset.map(partial(decode, tokenizer=tokenizer, feature="output"), num_proc=args.num_proc)
-    dataset = dataset.map(map_entity)
-    dataset.to_json(args.save_path, lines=True)
+    if(args.option == 'naiive'):
+        dataset = dataset.map(partial(map_question_to_input,option=args.option,retriever=None))
+        dataset = dataset.map(partial(build_prompt, tokenizer=tokenizer),num_proc=args.num_proc)
+        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_proc, collate_fn=partial(collate_fn, tokenizer=tokenizer), pin_memory=True) 
+        print("Length of DataLoader :",len(dataloader))
+
+        output_ids = generate(model, tokenizer, dataloader, args.log_every, max_new_tokens=args.max_tokens, do_sample=args.do_sample, temperature=args.temperature, top_k=args.top_k, top_p=args.top_p)
+        dataset = dataset.add_column("output_ids", output_ids) 
+        dataset = dataset.map(partial(decode, tokenizer=tokenizer, feature="output"), num_proc=args.num_proc)
+        dataset = dataset.map(map_entity)
+        dataset.to_json(args.save_path, lines=True)
+    elif(args.option =='rag'):
+        retriever = Retriever(args)
+        retriever.setup_retriever()
+        dataset = dataset.map(partial(map_question_to_input,option=args.option,retriever=retriever))
+        dataset = dataset.map(partial(build_prompt, tokenizer=tokenizer),num_proc=args.num_proc)
+        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_proc, collate_fn=partial(collate_fn, tokenizer=tokenizer), pin_memory=True) 
+        print("Length of DataLoader :",len(dataloader))
+
+        output_ids = generate(model, tokenizer, dataloader, args.log_every, max_new_tokens=args.max_tokens, do_sample=args.do_sample, temperature=args.temperature, top_k=args.top_k, top_p=args.top_p)
+        dataset = dataset.add_column("output_ids", output_ids) 
+        dataset = dataset.map(partial(decode, tokenizer=tokenizer, feature="output"), num_proc=args.num_proc)
+        dataset = dataset.map(map_entity)
+        dataset.to_json(args.save_path, lines=True)
