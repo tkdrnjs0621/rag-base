@@ -57,6 +57,8 @@ class Retriever:
                     emb = last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
                     embeddings.append(emb.cpu())
 
+                    batch_question = []
+
         embeddings = torch.cat(embeddings, dim=0)
         print(f"Questions embeddings shape: {embeddings.size()}")
 
@@ -90,9 +92,14 @@ class Retriever:
         index.index_data(ids_toadd, embeddings_toadd)
         return embeddings, ids
 
-    def add_passages(self, passages, top_passages_and_scores):
-        docs = [passages[doc_id] for doc_id in top_passages_and_scores[0][0]]
-        return docs
+    def add_passages(self, passages, top_passages_and_scores,top_n):
+        final=[]
+        for k in top_passages_and_scores:
+            tmp=[]
+            for kk in k[0][:top_n]:
+                tmp.append(passages[kk])
+            final.append(tmp)
+        return final
 
     def setup_retriever(self):
         print(f"Loading model from: {self.args.retrieval_model_name_or_path}")
@@ -134,7 +141,7 @@ class Retriever:
         top_ids_and_scores = self.index.search_knn(questions_embedding, self.args.max_k)
         print(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
 
-        return self.add_passages(self.passage_id_map, top_ids_and_scores)[:top_n]
+        return self.add_passages(self.passage_id_map, top_ids_and_scores, top_n)
     
     def reset_args(self,args):
         self.args = args
