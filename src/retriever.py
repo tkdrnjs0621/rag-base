@@ -11,6 +11,7 @@ import pickle
 import time
 import glob
 from pathlib import Path
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -67,8 +68,8 @@ class Retriever:
     def index_encoded_data(self, index, embedding_files, indexing_batch_size):
         allids = []
         allembeddings = np.array([])
-        for i, file_path in enumerate(embedding_files):
-            print(f"Loading file {file_path}")
+        for i, file_path in tqdm(enumerate(embedding_files),total=len(embedding_files),desc='Loading Enocded Data'):
+            # print(f"Loading file {file_path}")
             with open(file_path, "rb") as fin:
                 ids, embeddings = pickle.load(fin)
 
@@ -133,13 +134,14 @@ class Retriever:
         self.passage_id_map = {x["id"]: x for x in self.passages}
         print("passages have been loaded")
 
-    def search_document(self, query, top_n=10):
+    def search_document(self, query, top_n=10,verbose=False):
         questions_embedding = self.embed_queries(self.args, query)
 
         # get top k results
         start_time_retrieval = time.time()
         top_ids_and_scores = self.index.search_knn(questions_embedding, self.args.max_k)
-        print(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
+        if(verbose):
+            print(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
 
         return self.add_passages(self.passage_id_map, top_ids_and_scores, top_n)
     

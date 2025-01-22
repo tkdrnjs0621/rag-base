@@ -29,13 +29,13 @@ class Indexer(object):
             self.index.train(embeddings)
         self.index.add(embeddings)
 
-        print(f'Total data indexed {len(self.index_id_to_db_id)}')
+        # print(f'Total data indexed {len(self.index_id_to_db_id)}')
 
     def search_knn(self, query_vectors: np.array, top_docs: int, index_batch_size: int = 2048) -> List[Tuple[List[object], List[float]]]:
         query_vectors = query_vectors.astype('float32')
         result = []
         nbatch = (len(query_vectors)-1) // index_batch_size + 1
-        for k in tqdm(range(nbatch)):
+        for k in range(nbatch):
             start_idx = k*index_batch_size
             end_idx = min((k+1)*index_batch_size, len(query_vectors))
             q = query_vectors[start_idx: end_idx]
