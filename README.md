@@ -13,5 +13,5 @@ This repository mainly covers the simple 'Retrieve-Read' paradigm.
 ### Retriever
 The Retriever module is a refined implementation based on [Self-RAG](https://github.com/AkariAsai/self-rag), which in turn builds upon [Contriever](https://github.com/facebookresearch/contriever).
 
-Major change includes the usage of search_document() function. Our revision includes parallel query search, which can greatly reduce the time consumption of the retrieval module.
+Major change includes the usage of `search_document()` function. Our revision includes parallel query search, which can greatly reduce the time consumption of the retrieval module.
 
